@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BILLMAKE — Advanced Billing Software</title>
+
+  <!-- CDN লাইব্রেরি: jsPDF এবং html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    :root{
+      --primary:#1a3d7c;
+      --accent:#ff7a00;
+      --muted:#6c757d;
+      --card:#ffffff;
+      --bg:#f4f6f9;
+      --success:#28a745;
+      --danger:#dc3545;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background:var(--bg);
+      color:#222;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    /* Header */
+    header{
+      background:linear-gradient(90deg,var(--primary),#0f2b5c);
+      color:white;
+      padding:14px 20px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      position:sticky;
+      top:0;
+      z-index:1000;
+      box-shadow:0 3px 8px rgba(0,0,0,0.12);
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+    .logo{
+      width:44px;height:44px;border-radius:8px;background:white;color:var(--primary);
+      display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.12);
+    }
+    h1{margin:0;font-size:20px;letter-spacing:1px}
+    .header-actions{display:flex;gap:10px;align-items:center;}
+    .icon-btn{
+      background:transparent;border:1px solid rgba(255,255,255,0.18);
+      color:white;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:16px;
+      display:inline-flex;align-items:center;gap:8px;
+    }
+    .user-badge{
+      background:rgba(255,255,255,0.12);padding:6px 10px;border-radius:8px;font-size:14px;
+    }
+
+    /* Layout */
+    .container{max-width:1200px;margin:20px auto;padding:0 18px;}
+    .grid{display:grid;grid-template-columns: 1fr 420px;gap:18px;}
+    @media(max-width:900px){.grid{grid-template-columns:1fr;}}
+
+    .card{
+      background:var(--card);padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06);
+    }
+
+    /* Auth */
+    .auth{
+      display:flex;gap:10px;flex-direction:column;
+    }
+    .auth input, .auth button, .auth select{
+      padding:10px;border-radius:8px;border:1px solid #ddd;font-size:15px;
+    }
+    .auth .row{display:flex;gap:8px;}
+    .auth small{color:var(--muted)}
+
+    /* Form */
+    form#addItemForm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+    form#addItemForm input, form#addItemForm button, form#addItemForm select{
+      padding:10px;border-radius:8px;border:1px solid #ddd;font-size:15px;
+    }
+    #itemName{width:calc(100% - 0px);}
+    #quantity,#price{width:160px;}
+    #addBtn{background:var(--primary);color:white;border:none;padding:10px 14px;cursor:pointer;border-radius:8px;}
+    #addBtn:active{transform:translateY(1px)}
+
+    /* Table */
+    table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
+    th,td{padding:10px;border:1px solid #e7eaf0;text-align:center}
+    th{background:#f1f6ff;color:var(--primary);font-weight:600}
+    .action-btn{padding:6px 8px;border-radius:6px;border:none;cursor:pointer}
+    .btn-edit{background:#ffc107;color:#222}
+    .btn-delete{background:var(--danger);color:white}
+    .btn-save{background:var(--success);color:white}
+
+    /* Footer */
+    footer{margin-top:30px;padding:14px;text-align:center;background:linear-gradient(90deg,var(--primary),#0f2b5c);color:white;border-radius:8px}
+    .muted{color:var(--muted)}
+
+    /* Small helpers */
+    .top-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;}
+    .flex{display:flex;gap:8px;align-items:center}
+    .right-align{text-align:right}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">BM</div>
+    <div>
+      <h1>BILLMAKE</h1>
+      <div style="font-size:12px;opacity:0.9">Professional Billing Suite — Chittagong Edition</div>
+    </div>
+  </div>
+
+  <div class="header-actions">
+    <div id="headerUser" class="user-badge">Not signed in</div>
+    <button class="icon-btn" id="printBtn" title="Print bill (Ctrl+P)">🖨️ Print</button>
+    <button class="icon-btn" id="exportPdfBtn" title="Download as PDF">📥 Export PDF</button>
+    <button class="icon-btn" id="exportJsonBtn" title="Export data">🔁 Export JSON</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="grid">
+    <!-- LEFT: Bill area -->
+    <div>
+      <div class="card">
+        <div class="top-row">
+          <div>
+            <strong>Invoice To:</strong> <span id="clientNameDisplay" contenteditable="true" style="border-bottom:1px dashed #ddd;padding:2px 6px;border-radius:4px">প্রিয় গ্রাহক</span><br>
+            <small class="muted">আপনি এখানে ক্লিক করে ইনভয়েসের ক্লায়েন্ট নাম পরিবর্তন করতে পারবেন</small>
+          </div>
+
+          <div class="right-align">
+            <div><small class="muted">Invoice #</small> <strong id="invoiceNo">INV-<span id="invNum">001</span></strong></div>
+            <div><small class="muted">Date</small> <strong id="invDate"></strong></div>
+          </div>
+        </div>
+
+        <form id="addItemForm" autocomplete="off">
+          <div style="flex:1;min-width:220px">
+            <input list="savedItemsList" id="itemName" placeholder="Item Name (type new or select saved)" />
+            <datalist id="savedItemsList"></datalist>
+          </div>
+          <input type="number" id="quantity" placeholder="Quantity" min="1" value="1" />
+          <input type="number" id="price" placeholder="Unit Price (৳)" min="0" step="0.01" />
+          <button id="addBtn" type="submit">Add Item</button>
+        </form>
+
+        <table id="billTable" aria-label="Bill table">
+          <thead>
+            <tr><th>SL</th><th>Item</th><th>Qty</th><th>Unit (৳)</th><th>Total (৳)</th><th>Actions</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+          <div>
+            <label>
+              <input type="checkbox" id="showTax" /> Apply VAT (15%)
+            </label>
+          </div>
+          <div style="text-align:right">
+            <div class="muted">Subtotal:</div>
+            <div id="subtotal" style="font-size:18px;font-weight:700">0.00 ৳</div>
+            <div id="taxRow" style="display:none" class="muted">VAT (15%): <strong id="taxAmount">0.00 ৳</strong></div>
+            <div style="font-size:20px;margin-top:6px">Total: <span id="grandTotal">0.00 ৳</span></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button id="saveBillBtn" class="icon-btn" style="background:var(--primary);color:white;border:none">💾 Save Bill</button>
+          <button id="clearBtn" class="icon-btn" style="background:#e9ecef">🧹 Clear</button>
+          <div style="flex:1"></div>
+          <button id="downloadInvoiceBtn" class="icon-btn" style="background:var(--accent);color:white;border:none">⬇️ Download Invoice</button>
+        </div>
+      </div>
+
+      <!-- Saved bills list -->
+      <div class="card" id="savedBillsCard">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">Saved Bills</h3>
+          <div class="muted">Double click a bill to load</div>
+        </div>
+        <div id="savedBillsList" style="margin-top:12px;max-height:220px;overflow:auto"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Sidebar (Auth & Settings) -->
+    <aside>
+      <div class="card">
+        <h3 style="margin-top:0">User Auth</h3>
+        <div id="authArea">
+          <!-- Auth UI will be injected -->
+        </div>
+        <hr />
+        <div style="margin-top:8px">
+          <strong>Design</strong>
+          <p class="muted" style="margin:6px 0">Choose a template style</p>
+          <select id="themeSelect">
+            <option value="default">Official Blue</option>
+            <option value="dark">Dark</option>
+            <option value="green">Green</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h3 style="margin-top:0">Quick Actions</h3>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button id="newBillBtn" class="icon-btn" style="background:#17a2b8;color:white;border:none">➕ New Bill</button>
+          <button id="exportAllBtn" class="icon-btn" style="background:#6f42c1;color:white;border:none">📦 Export All Data</button>
+          <button id="importBtn" class="icon-btn" style="background:#343a40;color:white;border:none">📤 Import Data</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    এই ইমেইলটি “abbasuddin43@yahoo.com" শুধুমাত্র যোগাযোগের জন্য দেয়া আছে | BILLMAKE © <span id="year"></span>
+  </footer>
+</div>
+
+<script>
+  // ---------- Initialization & Helpers ----------
+  const { jsPDF } = window.jspdf || {};
+  const headerUser = document.getElementById('headerUser');
+  const authArea = document.getElementById('authArea');
+  const savedItemsList = document.getElementById('savedItemsList');
+  const addItemForm = document.getElementById('addItemForm');
+  const billTableBody = document.querySelector('#billTable tbody');
+  const subtotalEl = document.getElementById('subtotal');
+  const grandTotalEl = document.getElementById('grandTotal');
+  const taxCheckbox = document.getElementById('showTax');
+  const taxRow = document.getElementById('taxRow');
+  const taxAmountEl = document.getElementById('taxAmount');
+  const saveBillBtn = document.getElementById('saveBillBtn');
+  const savedBillsList = document.getElementById('savedBillsList');
+  const invNumEl = document.getElementById('invNum');
+  const invDateEl = document.getElementById('invDate');
+  const clientNameDisplay = document.getElementById('clientNameDisplay');
+
+  let bills = JSON.parse(localStorage.getItem('bills') || '[]'); // array of bill objects
+  let items = JSON.parse(localStorage.getItem('items') || '[]'); // array of item names
+  let currentItems = JSON.parse(localStorage.getItem('currentItems') || '[]'); // working items on current bill
+  let currentUser = JSON.parse(localStorage.getItem('bm_currentUser') || 'null');
+  let users = JSON.parse(localStorage.getItem('bm_users') || '[]'); // {email, password, name}
+
+  // Demo admin user (only if no users exist)
+  if(users.length === 0){
+    users.push({email:'admin@bill', password:'admin123', name:'Admin'});
+    localStorage.setItem('bm_users', JSON.stringify(users));
+  }
+
+  // Invoice number & date
+  function updateInvoiceNumber(){
+    const inv = localStorage.getItem('bm_lastInv') || '1';
+    invNumEl.textContent = String(inv).padStart(3,'0');
+  }
+  function incInvoiceNumber(){
+    let v = parseInt(localStorage.getItem('bm_lastInv') || '1', 10);
+    v++; localStorage.setItem('bm_lastInv', v);
+    updateInvoiceNumber();
+  }
+  function updateDate(){
+    const d = new Date();
+    invDateEl.textContent = d.toLocaleDateString();
+  }
+
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  // ---------- Auth UI & Logic ----------
+  function renderAuthArea(){
+    if(currentUser){
+      headerUser.textContent = currentUser.name || currentUser.email;
+      authArea.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div><strong>${currentUser.name || currentUser.email}</strong><br><small class="muted">${currentUser.email}</small></div>
+          <button id="logoutBtn" class="icon-btn" style="background:var(--danger);color:white;border:none">Logout</button>
+        </div>
+      `;
+      document.getElementById('logoutBtn').addEventListener('click', logout);
+    } else {
+      headerUser.textContent = 'Not signed in';
+      authArea.innerHTML = `
+        <div class="auth">
+          <input type="email" id="authEmail" placeholder="Email" />
+          <input type="password" id="authPass" placeholder="Password" />
+          <div class="row">
+            <button id="loginBtn" class="icon-btn" style="background:var(--primary);color:white;border:none">Sign In</button>
+            <button id="regBtn" class="icon-btn" style="background:#28a745;color:white;border:none">Register</button>
+          </div>
+          <small class="muted">Demo user: admin@bill / admin123</small>
+        </div>
+      `;
+      document.getElementById('loginBtn').addEventListener('click', login);
+      document.getElementById('regBtn').addEventListener('click', registerUser);
+    }
+  }
+
+  function login(){
+    const email = document.getElementById('authEmail').value.trim();
+    const pass = document.getElementById('authPass').value.trim();
+    if(!email || !pass){ alert('Email & password required'); return;}
+    const u = users.find(x => x.email === email && x.password === pass);
+    if(u){
+      currentUser = u;
+      localStorage.setItem('bm_currentUser', JSON.stringify(currentUser));
+      renderAuthArea();
+      alert('Signed in as ' + (u.name || u.email));
+    } else alert('Invalid credentials');
+  }
+
+  function registerUser(){
+    const email = document.getElementById('authEmail').value.trim();
+    const pass = document.getElementById('authPass').value.trim();
+    if(!email || !pass){ alert('Enter email & password'); return;}
+    if(users.find(x=>x.email===email)){ alert('User exists'); return;}
+    const name = email.split('@')[0];
+    const u = {email, password:pass, name};
+    users.push(u);
+    localStorage.setItem('bm_users', JSON.stringify(users));
+    alert('Registered. Now login.');
+  }
+
+  function logout(){
+    currentUser = null;
+    localStorage.removeItem('bm_currentUser');
+    renderAuthArea();
+  }
+
+  // ---------- Items / bill management ----------
+  function refreshSavedItemsList(){
+    savedItemsList.innerHTML = '';
+    items.forEach(it=>{
+      const opt = document.createElement('option'); opt.value = it;
+      savedItemsList.appendChild(opt);
+    });
+  }
+
+  function renderBillTable(){
+    billTableBody.innerHTML = '';
+    let subtotal = 0;
+    currentItems.forEach((row, idx) => {
+      const tr = document.createElement('tr');
+      const total = row.qty * row.price;
+      subtotal += total;
+      tr.innerHTML = `
+        <td>${idx+1}</td>
+        <td style="text-align:left">${escapeHtml(row.name)}</td>
+        <td>${row.qty}</td>
+        <td>${row.price.toFixed(2)}</td>
+        <td>${total.toFixed(2)}</td>
+        <td>
+          <button class="action-btn btn-edit" data-i="${idx}">Edit</button>
+          <button class="action-btn btn-delete" data-i="${idx}">Delete</button>
+        </td>
+      `;
+      billTableBody.appendChild(tr);
+    });
+    subtotalEl.textContent = subtotal.toFixed(2) + ' ৳';
+    const taxOn = taxCheckbox.checked;
+    if(taxOn){
+      const tax = subtotal * 0.15;
+      taxAmountEl.textContent = tax.toFixed(2) + ' ৳';
+      taxRow.style.display = 'block';
+      grandTotalEl.textContent = (subtotal + tax).toFixed(2) + ' ৳';
+    } else {
+      taxRow.style.display = 'none';
+      grandTotalEl.textContent = subtotal.toFixed(2) + ' ৳';
+    }
+    localStorage.setItem('currentItems', JSON.stringify(currentItems));
+  }
+
+  // add item
+  addItemForm.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const name = document.getElementById('itemName').value.trim();
+    const qty = parseFloat(document.getElementById('quantity').value) || 1;
+    const price = parseFloat(document.getElementById('price').value) || 0;
+    if(!name || qty <=0 || price < 0){ alert('Fill valid item data'); return; }
+    currentItems.push({name, qty, price});
+    if(!items.includes(name)){ items.push(name); localStorage.setItem('items', JSON.stringify(items)); refreshSavedItemsList();}
+    renderBillTable();
+    addItemForm.reset();
+  });
+
+  // edit & delete handlers (event delegation)
+  billTableBody.addEventListener('click', (e)=>{
+    if(e.target.matches('.btn-delete')){
+      const i = parseInt(e.target.dataset.i,10);
+      if(confirm('সুনিশ্চিত মুছে ফেলতে চান?')){ currentItems.splice(i,1); renderBillTable(); }
+    } else if(e.target.matches('.btn-edit')){
+      const i = parseInt(e.target.dataset.i,10);
+      openEditRow(i);
+    }
+  });
+
+  function openEditRow(i){
+    const row = currentItems[i];
+    // use prompt for simplicity; can be replaced by modal
+    const newName = prompt('Edit Item Name', row.name);
+    if(newName === null) return;
+    const newQty = parseFloat(prompt('Edit Quantity', row.qty));
+    if(isNaN(newQty) || newQty <= 0) { alert('Invalid qty'); return; }
+    const newPrice = parseFloat(prompt('Edit Unit Price', row.price));
+    if(isNaN(newPrice) || newPrice < 0) { alert('Invalid price'); return; }
+    currentItems[i] = {name:newName.trim(), qty:newQty, price:newPrice};
+    if(!items.includes(newName
